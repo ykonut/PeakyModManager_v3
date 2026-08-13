@@ -27,8 +27,11 @@ jobs:
       - name: Check upstream latest release tag
         id: tags
         run: |
-          UPSTREAM_TAG=$(gh release list --repo Tian-W001/PeakyModManager_v3 --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
-          LOCAL_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
+          UPSTREAM_TAG=$(git ls-remote --tags --refs https://github.com/Tian-W001/PeakyModManager_v3.git \
+            | awk -F/ '{print $3}' | sort -V | tail -1)
+          # 自己 fork 远端上已存在的最新 tag
+          LOCAL_TAG=$(git ls-remote --tags --refs origin \
+            | awk -F/ '{print $3}' | sort -V | tail -1)
           echo "upstream_tag=$UPSTREAM_TAG"
           echo "local_tag=$LOCAL_TAG"
           echo "UPSTREAM_TAG=$UPSTREAM_TAG" >> "$GITHUB_ENV"
@@ -45,7 +48,7 @@ jobs:
         if: env.NO_UPDATE == '0'
         run: |
           git remote add upstream https://github.com/Tian-W001/PeakyModManager_v3.git
-          git fetch upstream
+          git fetch upstream --tags
           git merge upstream/main --no-edit
           VERSION_NUM="${UPSTREAM_TAG#v}"
           npm version "$VERSION_NUM" --no-git-tag-version
