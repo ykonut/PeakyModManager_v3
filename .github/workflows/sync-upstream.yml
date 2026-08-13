@@ -1,0 +1,69 @@
+name: Sync Upstream & Release
+
+on:
+  schedule:
+    # 每天 UTC 02:00（北京时间 10:00）自动检查上游更新
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout macos-symlink-fix
+        uses: actions/checkout@v4
+        with:
+          ref: macos-symlink-fix
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync upstream
+        run: |
+          git remote add upstream https://github.com/Tian-W001/PeakyModManager_v3.git
+          git fetch upstream
+          BEHIND=$(git rev-list --count macos-symlink-fix..upstream/main 2>/dev/null || echo 0)
+          echo "behind=$BEHIND"
+          if [ "$BEHIND" = "0" ]; then
+            echo "NO_UPDATE=1" >> "$GITHUB_ENV"
+          else
+            git merge upstream/main --no-edit
+            echo "NO_UPDATE=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Upstream has no new commits
+        if: env.NO_UPDATE == '1'
+        run: echo "上游没有新提交，跳过构建。✅"
+
+      - name: Bump version if release already exists
+        if: env.NO_UPDATE == '0'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            npm version patch --no-git-tag-version
+            git add package.json package-lock.json
+            git commit -m "chore: bump version for new fork release"
+          fi
+          echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        if: env.NO_UPDATE == '0'
+        run: npm install
+
+      - name: Build and Publish
+        if: env.NO_UPDATE == '0'
+        run: |
+          npm run build
+          npx electron-builder --mac --publish=always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push merged branch
+        if: env.NO_UPDATE == '0'
+        run: git push origin macos-symlink-fix
