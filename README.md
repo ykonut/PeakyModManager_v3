@@ -2,6 +2,8 @@
 
 A lightweight mod manager for **Zenless Zone Zero**.
 
+> **This fork adds a native macOS build.** It is intended for running Zenless Zone Zero on macOS via **CrossOver** (or Wine/Whisky) and managing mods directly on the Mac. Only symlink handling and packaging were adapted for macOS; all functionality is unchanged.
+
 ## Features
 
 - **Mod Management**
