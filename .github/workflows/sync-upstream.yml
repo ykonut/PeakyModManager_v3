@@ -2,7 +2,7 @@ name: Sync Upstream & Release
 
 on:
   schedule:
-    # 每天 UTC 02:00（北京时间 10:00）自动检查上游更新
+    # 每天 UTC 02:00（北京时间 10:00）自动检查上游版本号
     - cron: "0 2 * * *"
   workflow_dispatch:
 
@@ -24,33 +24,35 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Sync upstream
+      - name: Sync upstream & compare version
         run: |
           git remote add upstream https://github.com/Tian-W001/PeakyModManager_v3.git
           git fetch upstream
-          BEHIND=$(git rev-list --count macos-symlink-fix..upstream/main 2>/dev/null || echo 0)
-          echo "behind=$BEHIND"
-          if [ "$BEHIND" = "0" ]; then
+          LOCAL_VERSION=$(node -p "require('./package.json').version")
+          UPSTREAM_VERSION=$(git show upstream/main:package.json | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null || echo "")
+          echo "local_version=$LOCAL_VERSION"
+          echo "upstream_version=$UPSTREAM_VERSION"
+          echo "LOCAL_VERSION=$LOCAL_VERSION" >> "$GITHUB_ENV"
+          echo "UPSTREAM_VERSION=$UPSTREAM_VERSION" >> "$GITHUB_ENV"
+          if [ "$LOCAL_VERSION" = "$UPSTREAM_VERSION" ]; then
+            echo "版本号相同，上游未发布新版本，跳过。✅"
             echo "NO_UPDATE=1" >> "$GITHUB_ENV"
           else
             git merge upstream/main --no-edit
             echo "NO_UPDATE=0" >> "$GITHUB_ENV"
           fi
 
-      - name: Upstream has no new commits
-        if: env.NO_UPDATE == '1'
-        run: echo "上游没有新提交，跳过构建。✅"
-
-      - name: Bump version if release already exists
+      - name: Release tag already exists
         if: env.NO_UPDATE == '0'
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            npm version patch --no-git-tag-version
-            git add package.json package-lock.json
-            git commit -m "chore: bump version for new fork release"
+          if gh release view "v${{ env.UPSTREAM_VERSION }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "该版本号已发布过，跳过发布（严格跟随上游）。✅"
+            echo "NO_UPDATE=1" >> "$GITHUB_ENV"
           fi
-          echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Upstream has no new version
+        if: env.NO_UPDATE == '1'
+        run: echo "上游没有新版本，跳过构建。✅"
 
       - name: Install dependencies
         if: env.NO_UPDATE == '0'
