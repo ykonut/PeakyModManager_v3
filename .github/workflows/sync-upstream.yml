@@ -2,7 +2,7 @@ name: Sync Upstream & Release
 
 on:
   schedule:
-    # 每天 UTC 02:00（北京时间 10:00）自动检查上游版本号
+    # 每天 UTC 02:00（北京时间 10:00）自动检查上游新版本号
     - cron: "0 2 * * *"
   workflow_dispatch:
 
@@ -24,31 +24,32 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Sync upstream & compare version
+      - name: Check upstream latest release tag
+        id: tags
+        run: |
+          UPSTREAM_TAG=$(gh release list --repo Tian-W001/PeakyModManager_v3 --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
+          LOCAL_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
+          echo "upstream_tag=$UPSTREAM_TAG"
+          echo "local_tag=$LOCAL_TAG"
+          echo "UPSTREAM_TAG=$UPSTREAM_TAG" >> "$GITHUB_ENV"
+          echo "LOCAL_TAG=$LOCAL_TAG" >> "$GITHUB_ENV"
+          if [ -n "$UPSTREAM_TAG" ] && [ "$UPSTREAM_TAG" != "$LOCAL_TAG" ]; then
+            echo "发现上游新版本 $UPSTREAM_TAG → 需要发布"
+            echo "NO_UPDATE=0" >> "$GITHUB_ENV"
+          else
+            echo "上游没有新版本（当前均为 $UPSTREAM_TAG），跳过。✅"
+            echo "NO_UPDATE=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Sync upstream code & set version
+        if: env.NO_UPDATE == '0'
         run: |
           git remote add upstream https://github.com/Tian-W001/PeakyModManager_v3.git
           git fetch upstream
-          LOCAL_VERSION=$(node -p "require('./package.json').version")
-          UPSTREAM_VERSION=$(git show upstream/main:package.json | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null || echo "")
-          echo "local_version=$LOCAL_VERSION"
-          echo "upstream_version=$UPSTREAM_VERSION"
-          echo "LOCAL_VERSION=$LOCAL_VERSION" >> "$GITHUB_ENV"
-          echo "UPSTREAM_VERSION=$UPSTREAM_VERSION" >> "$GITHUB_ENV"
-          if [ "$LOCAL_VERSION" = "$UPSTREAM_VERSION" ]; then
-            echo "版本号相同，上游未发布新版本，跳过。✅"
-            echo "NO_UPDATE=1" >> "$GITHUB_ENV"
-          else
-            git merge upstream/main --no-edit
-            echo "NO_UPDATE=0" >> "$GITHUB_ENV"
-          fi
-
-      - name: Release tag already exists
-        if: env.NO_UPDATE == '0'
-        run: |
-          if gh release view "v${{ env.UPSTREAM_VERSION }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "该版本号已发布过，跳过发布（严格跟随上游）。✅"
-            echo "NO_UPDATE=1" >> "$GITHUB_ENV"
-          fi
+          git merge upstream/main --no-edit
+          VERSION_NUM="${UPSTREAM_TAG#v}"
+          npm version "$VERSION_NUM" --no-git-tag-version
+          echo "VERSION_NUM=$VERSION_NUM" >> "$GITHUB_ENV"
 
       - name: Upstream has no new version
         if: env.NO_UPDATE == '1'
