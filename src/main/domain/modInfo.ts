@@ -1,6 +1,6 @@
 import path from "path";
-import { defaultModInfo, ModInfo } from "../../shared/modInfo";
-import { Character } from "../../shared/character";
+import { defaultModInfo, ModInfo } from "@shared/modInfo";
+import { Character } from "@shared/character";
 
 export const createModInfoFile = async (modPath: string, deps: ModInfoFileWriter): Promise<ModInfo> => {
   const modInfo: ModInfo = {
@@ -32,6 +32,7 @@ export const validateModInfo = (modInfo: Record<string, unknown>, folderName: st
     } else {
       fixedModInfo.character = "Unknown";
     }
+    fixedModInfo.outfitId = (modInfo.outfitId ?? 0) as number;
   }
   if (JSON.stringify(modInfo, null, 0) === JSON.stringify(fixedModInfo, null, 0)) {
     return { valid: true, fixedModInfo };

@@ -1,9 +1,9 @@
 import { ipcMain } from "electron";
 import fs from "fs-extra";
 import path from "path";
-import { loadLibrary, deleteMod } from "../domain/modLibrary";
-import { getLibraryPath, getTargetPath } from "../services/storeService";
-import { ModLibraryDeps } from "../domain/modLibrary";
+import { loadLibrary, deleteMod } from "@main/domain/modLibrary";
+import { getLibraryPath, getTargetPath } from "@main/services/storeService";
+import { ModLibraryDeps } from "@main/domain/modLibrary";
 
 const deps: ModLibraryDeps = {
   getLibraryPath,
@@ -19,6 +19,6 @@ const deps: ModLibraryDeps = {
 };
 
 export const registerLibraryHandlers = () => {
-  ipcMain.handle("load-library", async () => loadLibrary(deps));
+  ipcMain.handle("load-library", async (_event, failOnError = false) => loadLibrary(deps, failOnError === true));
   ipcMain.handle("delete-mod", async (_event, modName: string) => deleteMod(modName, deps));
 };
